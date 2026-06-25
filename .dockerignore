@@ -15,7 +15,6 @@ secrets/
 
 node_modules/
 frontend/node_modules/
-frontend/dist/
 frontend/.cache/
 
 .venv/
@@ -28,3 +27,6 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+
+!frontend/dist/
+!frontend/dist/**
