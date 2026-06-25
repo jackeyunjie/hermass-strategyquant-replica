@@ -4,6 +4,8 @@
 
 本指南配置 **GitHub Actions** 实现每次 push 到 `main` 分支时自动部署到阿里云服务器。
 
+当前 workflow 不要求服务器能直接 clone GitHub 仓库。Actions 会先 checkout 仓库并打包源码，再通过 SSH/SCP 上传到服务器，服务器端原地替换代码并保留生产 `.env`。
+
 ## 文件说明
 
 | 文件 | 说明 |
@@ -54,21 +56,22 @@ bash server-setup.sh
 
 ### 方式 A：SSH Key（推荐）
 
-初始化脚本会在服务器 `/root/.ssh/id_rsa` 生成私钥，在 `/root/.ssh/id_rsa.pub` 生成公钥。
+建议为 GitHub Actions 单独生成一把部署密钥，不复用日常登录密钥：
 
-1. 把公钥添加到服务器授权列表：
-   ```bash
-   cat /root/.ssh/id_rsa.pub >> /root/.ssh/authorized_keys
-   chmod 600 /root/.ssh/authorized_keys
-   ```
+```bash
+ssh root@8.130.125.201
+ssh-keygen -t ed25519 -f /root/.ssh/hermass_actions_deploy -C hermass-actions-deploy -N ""
+cat /root/.ssh/hermass_actions_deploy.pub >> /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
+```
 
-2. 把私钥完整内容复制到 GitHub Secrets：
+把私钥完整内容复制到 GitHub Secrets：
    - 打开 GitHub 仓库 → Settings → Secrets and variables → Actions
    - 点击 `New repository secret`
    - Name: `SERVER_SSH_KEY`
-   - Value: 部署私钥的完整内容
+   - Value: `/root/.ssh/hermass_actions_deploy` 的完整内容
 
-3. 添加其他 Secrets：
+添加其他 Secrets：
 
 | Secret Name | Value |
 |-------------|-------|
@@ -87,7 +90,7 @@ password: ${{ secrets.SERVER_PASSWORD }}
 
 并在 GitHub Secrets 中添加 `SERVER_PASSWORD`。
 
-> ⚠️ 密码认证安全性较低，建议后续迁移到 SSH key。
+> 密码认证安全性较低，建议只使用 SSH key。
 
 ## 第三步：配置 DNS
 
@@ -146,6 +149,14 @@ certbot --nginx -d quant.superalpha.com.cn
 3. 确认 workflow 运行成功（绿色 ✓）
 4. 访问 `http://quant.superalpha.com.cn/health` 验证；HTTPS 证书配置完成后再验证 `https://quant.superalpha.com.cn/health`
 
+workflow 会执行三段动作：
+
+1. 在 GitHub runner 上打包源码，排除 `.env`、`node_modules`、`frontend/dist`、缓存目录。
+2. 上传 `hermass-release.tgz` 到服务器 `/tmp`。
+3. 在服务器 `/opt/hermass-strategyquant-replica` 保留 `.env`，替换代码，执行 `deploy/deploy.sh --ci`，并校验本机 `127.0.0.1:8081/health` 和公网 `/health`。
+
+生产环境变量只存放在服务器 `/opt/hermass-strategyquant-replica/.env`，不会由 GitHub Actions 覆盖。
+
 ## 日常运维
 
 ### 查看日志
@@ -183,6 +194,7 @@ docker compose up -d
 | 前端白屏 | `docker compose logs nginx`；检查 `deploy/Dockerfile.frontend` 构建是否成功 |
 | 数据库连接失败 | `docker compose logs db` |
 | SSL 证书错误 | `openssl x509 -in /path/to/cert.pem -noout -dates` |
+| workflow 部署后登录失败 | 检查服务器 `.env` 是否保留、`docker compose exec backend python scripts/seed_db.py --create-tables --sync` 是否已执行 |
 
 ## 安全建议
 

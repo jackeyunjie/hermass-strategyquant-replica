@@ -31,6 +31,36 @@ jobs:
     environment: production
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Package release archive
+        run: |
+          set -euo pipefail
+          tar \
+            --exclude='.git' \
+            --exclude='.env' \
+            --exclude='*/.env' \
+            --exclude='node_modules' \
+            --exclude='*/node_modules' \
+            --exclude='frontend/dist' \
+            --exclude='__pycache__' \
+            --exclude='*/__pycache__' \
+            --exclude='.pytest_cache' \
+            --exclude='*/.pytest_cache' \
+            -czf hermass-release.tgz .
+
+      - name: Upload release archive
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || '22' }}
+          source: hermass-release.tgz
+          target: /tmp
+          overwrite: true
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -45,32 +75,62 @@ jobs:
             set -euo pipefail
 
             APP_DIR="/opt/hermass-strategyquant-replica"
-            REPO_URL="https://github.com/jackeyunjie/hermass-strategyquant-replica.git"
+            ARCHIVE="/tmp/hermass-release.tgz"
+            ENV_BACKUP="/tmp/hermass.env.$$"
+            DEPLOY_ENV_BACKUP="/tmp/hermass.deploy.env.$$"
 
             echo "=== Hermass GitHub Actions Deployment ==="
             echo "Timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
             echo "App dir: $APP_DIR"
 
-            # Ensure app directory exists
+            if [ ! -f "$ARCHIVE" ]; then
+              echo "[ERROR] Release archive not found: $ARCHIVE"
+              exit 1
+            fi
+
             mkdir -p "$APP_DIR"
 
-            # Clone or pull latest code
-            if [ -d "$APP_DIR/.git" ]; then
-              echo "[INFO] Pulling latest code..."
-              cd "$APP_DIR"
-              git fetch origin
-              git reset --hard origin/main
-              git clean -fd
-            else
-              echo "[INFO] Cloning repository..."
-              rm -rf "$APP_DIR"
-              git clone "$REPO_URL" "$APP_DIR"
-              cd "$APP_DIR"
+            if [ -f "$APP_DIR/.env" ]; then
+              cp "$APP_DIR/.env" "$ENV_BACKUP"
+              echo "[INFO] Preserved existing .env"
             fi
+            if [ -f "$APP_DIR/deploy/.env" ]; then
+              cp "$APP_DIR/deploy/.env" "$DEPLOY_ENV_BACKUP"
+            fi
+
+            echo "[INFO] Replacing application files from release archive..."
+            find "$APP_DIR" -mindepth 1 -maxdepth 1 ! -name ".env" -exec rm -rf {} +
+            tar -xzf "$ARCHIVE" -C "$APP_DIR"
+
+            if [ -f "$ENV_BACKUP" ]; then
+              mv "$ENV_BACKUP" "$APP_DIR/.env"
+            fi
+            mkdir -p "$APP_DIR/deploy"
+            if [ -f "$DEPLOY_ENV_BACKUP" ]; then
+              mv "$DEPLOY_ENV_BACKUP" "$APP_DIR/deploy/.env"
+            fi
+
+            cat > "$APP_DIR/DEPLOYED_VERSION" <<VERSION_EOF
+            commit=${{ github.sha }}
+            ref=${{ github.ref_name }}
+            workflow_run=${{ github.run_id }}
+            deployed_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+            url=http://quant.superalpha.com.cn
+            VERSION_EOF
+
+            chmod +x "$APP_DIR/deploy/deploy.sh" "$APP_DIR/deploy/server-setup.sh" "$APP_DIR/scripts/prod_smoke.sh" || true
 
             # Run CI deployment script
             echo "[INFO] Running deployment script..."
             cd "$APP_DIR/deploy"
             bash deploy.sh --ci
 
+            echo "[INFO] Verifying local health endpoint..."
+            curl -fsS http://127.0.0.1:8081/health
+
             echo "[INFO] Deployment completed successfully."
+
+      - name: Verify public health endpoint
+        run: |
+          set -euo pipefail
+          curl -fsS http://quant.superalpha.com.cn/health
