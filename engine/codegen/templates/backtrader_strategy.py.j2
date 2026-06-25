@@ -1,0 +1,337 @@
+{# Jinja2 模板：生成 backtrader 策略代码
+   使用说明：
+   - 此模板接收 StrategyIR 渲染上下文，生成可在 backtrader
+     框架中运行的 Cerebro 策略。
+   - 依赖：backtrader, pandas, numpy
+   - 生成的代码可直接运行（假设数据源已替换为真实数据）
+#}
+import backtrader as bt
+import pandas as pd
+import numpy as np
+from datetime import datetime
+
+# ====================================================================
+# 策略配置（由 StrategyIR 生成）
+# 本段包含策略的元数据和回测参数配置
+# ====================================================================
+STRATEGY_NAME = "{{ strategy_name }}"
+STRATEGY_ID = "{{ strategy_id }}"
+DESCRIPTION = """{{ description }}"""
+
+TIMEFRAME = "{{ config.timeframe }}"
+MARKET = "{{ config.market }}"
+SLIPPAGE = {{ config.slippage }}
+COMMISSION_RATE = {{ config.commission_rate }}
+INITIAL_CAPITAL = {{ config.initial_capital }}
+POSITION_SIZING = "{{ config.position_sizing }}"
+MAX_POSITIONS = {{ config.max_positions }}
+
+
+# ====================================================================
+# 数据加载函数
+# 用户需替换为真实数据源，如本地 CSV、数据库或 API
+# ====================================================================
+def load_data(symbol: str, start: str, end: str) -> pd.DataFrame:
+    """
+    加载历史行情数据。
+
+    Args:
+        symbol: 股票代码，如 '000001.SZ'。
+        start: 开始日期，如 '2020-01-01'。
+        end: 结束日期，如 '2024-01-01'。
+
+    Returns:
+        pd.DataFrame: 包含 open, high, low, close, volume 列的 DataFrame。
+    """
+    # 示例：使用 yfinance 加载数据（可替换为 akshare、tushare 等 A 股数据源）
+    # import yfinance as yf
+    # data = yf.download(symbol, start=start, end=end)
+    # return data
+    raise NotImplementedError("请实现 load_data 函数以接入真实数据源")
+
+
+# ====================================================================
+# 策略类定义
+# 继承 bt.Strategy，在 __init__ 中初始化指标，在 next() 中执行交易逻辑
+# ====================================================================
+class {{ strategy_name | replace(' ', '_') | replace('-', '_') }}Strategy(bt.Strategy):
+    """
+    自动生成的 backtrader 策略：{{ description }}
+    策略 ID：{{ strategy_id }}
+    生成时间：{{ now }}
+    """
+
+    # 策略可调参数（从 StrategyIR 的 VALUE 和 PARAM 节点解析）
+    params = (
+        {% if variables %}
+        {% for key, value in variables.items() %}
+        ('{{ key }}', {{ value | tojson }}),
+        {% endfor %}
+        {% else %}
+        ('lookback', 20),
+        ('threshold', 0.02),
+        {% endif %}
+    )
+
+    def __init__(self):
+        """
+        初始化技术指标。
+        在回测开始前一次性计算所有指标值。
+        """
+        # 记录指标引用，便于在 next() 中访问
+        self.indicators_dict = {}
+
+        {% for node_id, ind in indicator_expressions.items() %}
+        # 指标：{{ ind.name }}（节点 {{ node_id }}）
+        # 参数：{{ ind.params | tojson }}
+        self.indicators_dict['{{ ind.var_name }}'] = {{ ind.expr }}
+        {% else %}
+        # 未检测到指标节点，使用默认 SMA 占位符
+        self.sma = bt.indicators.SimpleMovingAverage(self.data.close, period=self.p.lookback)
+        {% endfor %}
+
+    def next(self):
+        """
+        逐 K 线执行交易逻辑。
+        backtrader 会在每根 K 线收盘时调用此方法。
+        """
+        # 获取当前 K 线的数据
+        current_close = self.data.close[0]
+        current_open = self.data.open[0]
+        current_high = self.data.high[0]
+        current_low = self.data.low[0]
+        current_volume = self.data.volume[0]
+
+        # 买入条件（根据 StrategyIR 解析生成）
+        {% for cond in entry_conditions %}
+        # 买入条件 {{ loop.index }}：{{ cond }}
+        {% endfor %}
+        entry_signal = (
+            {% for cond in entry_conditions %}
+            ({{ cond }}){% if not loop.last %} and {% endif %}
+            {% else %}
+            False  # 默认无买入条件
+            {% endfor %}
+        )
+
+        # 卖出条件（根据 StrategyIR 解析生成）
+        {% for cond in exit_conditions %}
+        # 卖出条件 {{ loop.index }}：{{ cond }}
+        {% endfor %}
+        exit_signal = (
+            {% for cond in exit_conditions %}
+            ({{ cond }}){% if not loop.last %} and {% endif %}
+            {% else %}
+            False  # 默认无卖出条件
+            {% endfor %}
+        )
+
+        # 交易执行
+        if not self.position:
+            # 当前无持仓，检查买入信号
+            if entry_signal:
+                # 根据仓位管理模型计算下单数量
+                if POSITION_SIZING == "fixed":
+                    size = 1000  # 固定股数
+                elif POSITION_SIZING == "percent":
+                    cash = self.broker.getcash()
+                    size = int(cash * 0.1 / current_close)  # 10% 资金
+                else:
+                    size = 1000
+
+                self.buy(size=size)
+                print(
+                    f"买入信号: 日期 {self.data.datetime.date(0)}, "
+                    f"价格 {current_close:.2f}, 数量 {size}"
+                )
+        else:
+            # 当前有持仓，检查卖出信号
+            if exit_signal:
+                self.sell(size=self.position.size)
+                print(
+                    f"卖出信号: 日期 {self.data.datetime.date(0)}, "
+                    f"价格 {current_close:.2f}, 数量 {self.position.size}"
+                )
+
+    def notify_order(self, order):
+        """
+        订单状态通知回调。
+        当订单被接受、执行或拒绝时触发。
+        """
+        if order.status in [order.Submitted, order.Accepted]:
+            return
+
+        if order.status in [order.Completed]:
+            if order.isbuy():
+                print(
+                    f"买入成交: 价格 {order.executed.price:.2f}, "
+                    f"成本 {order.executed.value:.2f}, "
+                    f"佣金 {order.executed.comm:.2f}"
+                )
+            else:
+                print(
+                    f"卖出成交: 价格 {order.executed.price:.2f}, "
+                    f"成本 {order.executed.value:.2f}, "
+                    f"佣金 {order.executed.comm:.2f}"
+                )
+        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
+            print(f"订单失败: {order.status}")
+
+
+# ====================================================================
+# 回测执行函数
+# 使用 bt.Cerebro 构建回测引擎并运行
+# ====================================================================
+def run_backtest(df: pd.DataFrame, config: dict) -> bt.Cerebro:
+    """
+    使用 backtrader 执行事件驱动回测。
+
+    Args:
+        df: 行情数据 DataFrame（用于 bt.feeds.PandasData）。
+        config: 回测配置字典。
+
+    Returns:
+        bt.Cerebro: 运行后的 Cerebro 实例。
+    """
+    cerebro = bt.Cerebro()
+
+    # 添加策略
+    cerebro.addstrategy({{ strategy_name | replace(' ', '_') | replace('-', '_') }}Strategy)
+
+    # 加载数据（使用 PandasData 直接传入 DataFrame）
+    data = bt.feeds.PandasData(
+        dataname=df,
+        datetime=None,  # 使用 DataFrame 的索引作为日期
+        open="open",
+        high="high",
+        low="low",
+        close="close",
+        volume="volume",
+    )
+    cerebro.adddata(data)
+
+    # 设置初始资金
+    cerebro.broker.setcash(config.get("initial_capital", INITIAL_CAPITAL))
+
+    # 设置手续费（A 股默认双边万三）
+    cerebro.broker.setcommission(
+        commission=config.get("commission_rate", COMMISSION_RATE),
+        margin=False,
+        mult=1.0,
+    )
+
+    # 设置滑点（百分比模型）
+    cerebro.broker.set_slippage_perc(
+        perc=config.get("slippage", SLIPPAGE),
+    )
+
+    # 添加分析器（Analyzer）
+    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name="sharpe")
+    cerebro.addanalyzer(bt.analyzers.DrawDown, _name="drawdown")
+    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name="trades")
+    cerebro.addanalyzer(bt.analyzers.Returns, _name="returns")
+    cerebro.addanalyzer(bt.analyzers.SQN, _name="sqn")
+
+    # 运行回测
+    print(f"初始资金: {cerebro.broker.getvalue():.2f}")
+    results = cerebro.run()
+    print(f"最终资金: {cerebro.broker.getvalue():.2f}")
+
+    return cerebro, results
+
+
+# ====================================================================
+# 性能分析函数
+# 从 backtrader 分析器中提取关键性能指标
+# ====================================================================
+def analyze_performance(results: list) -> dict:
+    """
+    从 backtrader 结果中提取性能指标。
+
+    Args:
+        results: cerebro.run() 返回的结果列表。
+
+    Returns:
+        dict: 包含性能指标的字典。
+    """
+    if not results:
+        return {}
+
+    strat = results[0]
+    metrics = {}
+
+    # 夏普比率
+    sharpe = strat.analyzers.sharpe.get_analysis()
+    metrics["sharpe_ratio"] = sharpe.get("sharperatio", 0)
+
+    # 最大回撤
+    drawdown = strat.analyzers.drawdown.get_analysis()
+    metrics["max_drawdown"] = drawdown.get("max.drawdown", 0)
+    metrics["max_drawdown_len"] = drawdown.get("max.len", 0)
+
+    # 交易分析
+    trades = strat.analyzers.trades.get_analysis()
+    if trades:
+        metrics["total_trades"] = trades.get("total", {}).get("total", 0)
+        metrics["win_trades"] = trades.get("won", {}).get("total", 0)
+        metrics["lose_trades"] = trades.get("lost", {}).get("total", 0)
+        if metrics["total_trades"] > 0:
+            metrics["win_rate"] = metrics["win_trades"] / metrics["total_trades"] * 100
+
+    # 收益分析
+    returns = strat.analyzers.returns.get_analysis()
+    metrics["total_return"] = returns.get("rtot", 0) * 100
+    metrics["annual_return"] = returns.get("ravg", 0) * 252 * 100
+
+    # SQN 系统质量数
+    sqn = strat.analyzers.sqn.get_analysis()
+    metrics["sqn"] = sqn.get("sqn", 0)
+
+    return metrics
+
+
+# ====================================================================
+# 主函数入口
+# 完整执行流程：加载数据 → 回测 → 分析结果
+# ====================================================================
+def main():
+    """
+    策略主入口函数。
+    执行完整的事件驱动回测流程并打印性能指标。
+    """
+    print(f"策略名称: {STRATEGY_NAME}")
+    print(f"策略 ID: {STRATEGY_ID}")
+    print(f"描述: {DESCRIPTION}")
+    print("-" * 60)
+
+    # 1. 加载数据
+    symbol = "000001.SZ"  # 示例：平安银行（请替换为真实代码）
+    start = "2020-01-01"
+    end = "2024-01-01"
+    df = load_data(symbol, start, end)
+    print(f"数据加载完成：{len(df)} 条 K 线")
+
+    # 2. 执行回测
+    config = {
+        "slippage": SLIPPAGE,
+        "commission_rate": COMMISSION_RATE,
+        "initial_capital": INITIAL_CAPITAL,
+        "position_sizing": POSITION_SIZING,
+        "timeframe": TIMEFRAME,
+    }
+    cerebro, results = run_backtest(df, config)
+    print("回测执行完成")
+
+    # 3. 分析性能
+    metrics = analyze_performance(results)
+    print("\n===== 回测性能报告 =====")
+    for key, value in metrics.items():
+        print(f"  {key}: {value}")
+    print("=" * 60)
+
+    # 4. 绘制图表（可选）
+    # cerebro.plot()
+
+
+if __name__ == "__main__":
+    main()

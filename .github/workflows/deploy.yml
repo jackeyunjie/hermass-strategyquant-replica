@@ -1,0 +1,76 @@
+# =============================================================================
+# GitHub Actions Deployment Workflow
+# Target: Alibaba Cloud ECS @ 8.130.125.201
+# Domain: quant.superalpha.com.cn
+# Repo: https://github.com/jackeyunjie/hermass-strategyquant-replica
+# =============================================================================
+name: Deploy to Alibaba Cloud
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || '22' }}
+          script_stop: true
+          timeout: 300s
+          command_timeout: 25m
+          script: |
+            set -euo pipefail
+
+            APP_DIR="/opt/hermass-strategyquant-replica"
+            REPO_URL="https://github.com/jackeyunjie/hermass-strategyquant-replica.git"
+
+            echo "=== Hermass GitHub Actions Deployment ==="
+            echo "Timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
+            echo "App dir: $APP_DIR"
+
+            # Ensure app directory exists
+            mkdir -p "$APP_DIR"
+
+            # Clone or pull latest code
+            if [ -d "$APP_DIR/.git" ]; then
+              echo "[INFO] Pulling latest code..."
+              cd "$APP_DIR"
+              git fetch origin
+              git reset --hard origin/main
+              git clean -fd
+            else
+              echo "[INFO] Cloning repository..."
+              rm -rf "$APP_DIR"
+              git clone "$REPO_URL" "$APP_DIR"
+              cd "$APP_DIR"
+            fi
+
+            # Run CI deployment script
+            echo "[INFO] Running deployment script..."
+            cd "$APP_DIR/deploy"
+            bash deploy.sh --ci
+
+            echo "[INFO] Deployment completed successfully."

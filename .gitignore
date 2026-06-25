@@ -1,0 +1,91 @@
+# =============================================================================
+# Hermass StrategyQuant Replica - Git Ignore
+# =============================================================================
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.crt
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+ENV/
+env/
+
+# Node.js
+node_modules/
+frontend/dist/
+frontend/.cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Logs
+logs/
+*.log
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+docker-compose.override.yml
+
+# Deployment artifacts
+*.zip
+*.tar.gz
+hermass-deploy/
+
+# Test coverage
+htmlcov/
+.coverage
+coverage.xml
+
+# Alembic
+alembic.ini.bak
+
+# Runtime / test artifacts
+tmp/
+*.pid
+nohup.out
+.playwright-mcp/
+screenshot-*.png
+hermass-prod-*.png

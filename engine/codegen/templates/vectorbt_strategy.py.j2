@@ -1,0 +1,258 @@
+{# Jinja2 模板：生成 vectorbt 策略代码
+   使用说明：
+   - 此模板接收 StrategyIR 渲染上下文，生成可在
+     vectorbt 中回测的 Python 脚本。
+   - 依赖：vectorbt, pandas, numpy, ta
+   - 生成的代码可直接运行（假设数据源已替换为真实数据）
+#}
+import pandas as pd
+import numpy as np
+import vectorbt as vbt
+import ta
+
+# ====================================================================
+# 策略配置（由 StrategyIR 生成）
+# 本段包含策略的元数据和回测参数配置
+# ====================================================================
+STRATEGY_NAME = "{{ strategy_name }}"
+STRATEGY_ID = "{{ strategy_id }}"
+DESCRIPTION = """{{ description }}"""
+
+TIMEFRAME = "{{ config.timeframe }}"
+MARKET = "{{ config.market }}"
+SLIPPAGE = {{ config.slippage }}
+COMMISSION_RATE = {{ config.commission_rate }}
+INITIAL_CAPITAL = {{ config.initial_capital }}
+POSITION_SIZING = "{{ config.position_sizing }}"
+MAX_POSITIONS = {{ config.max_positions }}
+
+
+# ====================================================================
+# 数据加载函数
+# 用户需替换为真实数据源，如本地 CSV、数据库或 API
+# ====================================================================
+def load_data(symbol: str, start: str, end: str) -> pd.DataFrame:
+    """
+    加载历史行情数据。
+
+    Args:
+        symbol: 股票代码，如 '000001.SZ'。
+        start: 开始日期，如 '2020-01-01'。
+        end: 结束日期，如 '2024-01-01'。
+
+    Returns:
+        pd.DataFrame: 包含 open, high, low, close, volume 列的 DataFrame。
+    """
+    # 示例：使用 yfinance 加载数据（可替换为 akshare、tushare 等 A 股数据源）
+    # import yfinance as yf
+    # data = yf.download(symbol, start=start, end=end)
+    # return data
+    raise NotImplementedError("请实现 load_data 函数以接入真实数据源")
+
+
+# ====================================================================
+# 指标计算函数
+# 根据 StrategyIR 中的指标节点自动生成指标计算逻辑
+# ====================================================================
+def calculate_indicators(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """
+    计算策略所需技术指标。
+
+    Args:
+        df: 原始行情数据 DataFrame，包含 OHLCV 列。
+        params: 策略参数字典。
+
+    Returns:
+        pd.DataFrame: 添加了指标列的 DataFrame。
+    """
+    close = df["close"]
+    high = df["high"]
+    low = df["low"]
+    open_ = df["open"]
+    volume = df["volume"]
+
+    # 计算指标（根据 StrategyIR 自动生成）
+    {% for node_id, ind in indicator_expressions.items() %}
+    # 指标：{{ ind.name }}（节点 {{ node_id }}）
+    df["{{ ind.var_name }}"] = {{ ind.expr }}
+    {% else %}
+    # 未检测到指标节点，使用默认占位符
+    # fast_ma = vbt.MA.run(close, window=10).ma
+    # slow_ma = vbt.MA.run(close, window=50).ma
+    {% endfor %}
+
+    return df
+
+
+# ====================================================================
+# 信号生成函数
+# 根据策略 IR 中的条件和动作节点生成买卖信号
+# 买入信号：布尔 Series，True 表示在该 K 线买入
+# 卖出信号：布尔 Series，True 表示在该 K 线卖出
+# ====================================================================
+def generate_signals(df: pd.DataFrame, params: dict) -> tuple:
+    """
+    根据策略 IR 生成交易信号。
+
+    Args:
+        df: 包含指标列的 DataFrame。
+        params: 策略参数字典。
+
+    Returns:
+        tuple: (entries, exits) 两个布尔 Series。
+    """
+    entries = pd.Series(False, index=df.index)
+    exits = pd.Series(False, index=df.index)
+
+    # 买入条件（根据 StrategyIR 解析生成）
+    {% for cond in entry_conditions %}
+    # 买入条件 {{ loop.index }}：{{ cond }}
+    condition_{{ loop.index }} = {{ cond }}
+    entries = entries | condition_{{ loop.index }}
+    {% else %}
+    # 默认买入条件：无
+    entries = pd.Series(False, index=df.index)
+    {% endfor %}
+
+    # 卖出条件（根据 StrategyIR 解析生成）
+    {% for cond in exit_conditions %}
+    # 卖出条件 {{ loop.index }}：{{ cond }}
+    condition_exit_{{ loop.index }} = {{ cond }}
+    exits = exits | condition_exit_{{ loop.index }}
+    {% else %}
+    # 默认卖出条件：无
+    exits = pd.Series(False, index=df.index)
+    {% endfor %}
+
+    # 防止同时出现买入和卖出信号（卖出优先）
+    entries = entries & (~exits)
+
+    return entries, exits
+
+
+# ====================================================================
+# 回测执行函数
+# 使用 vectorbt 的 Portfolio.from_signals 进行向量化回测
+# ====================================================================
+def run_backtest(
+    df: pd.DataFrame, entries: pd.Series, exits: pd.Series, config: dict
+) -> vbt.Portfolio:
+    """
+    执行向量化回测。
+
+    Args:
+        df: 行情数据 DataFrame。
+        entries: 买入信号布尔 Series。
+        exits: 卖出信号布尔 Series。
+        config: 回测配置字典。
+
+    Returns:
+        vbt.Portfolio: 回测结果对象。
+    """
+    close = df["close"]
+
+    # 仓位管理：根据配置选择固定金额或百分比
+    size = config.get("size", 0.1)  # 默认使用 10% 资金
+    if config.get("position_sizing") == "fixed":
+        size = config.get("fixed_amount", 100000)  # 固定金额
+
+    # 运行回测
+    portfolio = vbt.Portfolio.from_signals(
+        close=close,
+        entries=entries,
+        exits=exits,
+        size=size,
+        slippage=config.get("slippage", SLIPPAGE),
+        fees=config.get("commission_rate", COMMISSION_RATE),
+        init_cash=config.get("initial_capital", INITIAL_CAPITAL),
+        freq=config.get("timeframe", TIMEFRAME),
+    )
+
+    return portfolio
+
+
+# ====================================================================
+# 性能分析函数
+# 输出回测的核心性能指标：总收益、夏普比率、最大回撤等
+# ====================================================================
+def analyze_performance(portfolio: vbt.Portfolio) -> dict:
+    """
+    分析回测性能并返回关键指标。
+
+    Args:
+        portfolio: vectorbt 回测结果对象。
+
+    Returns:
+        dict: 包含性能指标的字典。
+    """
+    stats = portfolio.stats()
+
+    # 提取关键指标
+    metrics = {
+        "total_return": stats.get("Total Return [%]", 0),
+        "sharpe_ratio": stats.get("Sharpe Ratio", 0),
+        "max_drawdown": stats.get("Max Drawdown [%]", 0),
+        "win_rate": stats.get("Win Rate [%]", 0),
+        "avg_win": stats.get("Avg Winning Trade [%]", 0),
+        "avg_loss": stats.get("Avg Losing Trade [%]", 0),
+        "total_trades": stats.get("Total Trades", 0),
+    }
+
+    return metrics
+
+
+# ====================================================================
+# 主函数入口
+# 完整执行流程：加载数据 → 计算指标 → 生成信号 → 回测 → 输出结果
+# ====================================================================
+def main():
+    """
+    策略主入口函数。
+    执行完整的回测流程并打印性能指标。
+    """
+    print(f"策略名称: {STRATEGY_NAME}")
+    print(f"策略 ID: {STRATEGY_ID}")
+    print(f"描述: {DESCRIPTION}")
+    print("-" * 60)
+
+    # 1. 加载数据
+    symbol = "000001.SZ"  # 示例：平安银行（请替换为真实代码）
+    start = "2020-01-01"
+    end = "2024-01-01"
+    df = load_data(symbol, start, end)
+    print(f"数据加载完成：{len(df)} 条 K 线")
+
+    # 2. 计算指标
+    params = {}
+    df = calculate_indicators(df, params)
+    print("技术指标计算完成")
+
+    # 3. 生成信号
+    entries, exits = generate_signals(df, params)
+    print(f"买入信号数：{entries.sum()}")
+    print(f"卖出信号数：{exits.sum()}")
+
+    # 4. 执行回测
+    config = {
+        "slippage": SLIPPAGE,
+        "commission_rate": COMMISSION_RATE,
+        "initial_capital": INITIAL_CAPITAL,
+        "position_sizing": POSITION_SIZING,
+        "timeframe": TIMEFRAME,
+    }
+    portfolio = run_backtest(df, entries, exits, config)
+    print("回测执行完成")
+
+    # 5. 分析性能
+    metrics = analyze_performance(portfolio)
+    print("\n===== 回测性能报告 =====")
+    for key, value in metrics.items():
+        print(f"  {key}: {value}")
+    print("=" * 60)
+
+    # 6. 绘制图表（可选）
+    # portfolio.plot().show()
+
+
+if __name__ == "__main__":
+    main()

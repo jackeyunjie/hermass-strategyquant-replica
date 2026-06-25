@@ -1,0 +1,393 @@
+/* Ant Design styles */
+@import 'antd/dist/reset.css';
+
+/* ReactFlow styles */
+@import 'reactflow/dist/style.css';
+
+/* AG Grid styles */
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-alpine.css';
+
+/* CSS Variables */
+:root {
+  --primary-color: #1890ff;
+  --success-color: #52c41a;
+  --warning-color: #faad14;
+  --error-color: #f5222d;
+  --info-color: #13c2c2;
+  --text-primary: #262626;
+  --text-secondary: #595959;
+  --text-disabled: #bfbfbf;
+  --bg-body: #f0f2f5;
+  --bg-card: #ffffff;
+  --border-color: #f0f0f0;
+  --sidebar-width: 200px;
+  --sidebar-collapsed-width: 64px;
+  --header-height: 64px;
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
+}
+
+/* Dark mode */
+[data-theme='dark'] {
+  --bg-body: #141414;
+  --bg-card: #1f1f1f;
+  --text-primary: #ffffff;
+  --text-secondary: #a6a6a6;
+  --border-color: #333333;
+}
+
+/* Global styles */
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-body);
+  color: var(--text-primary);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Scrollbar in dark mode */
+[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: #555;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* Page layout */
+.sidebar-container {
+  transition: width 0.2s;
+}
+
+/* ReactFlow custom node styles */
+.custom-node {
+  transition: box-shadow 0.2s, transform 0.1s;
+}
+
+.custom-node:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  transform: translateY(-1px);
+}
+
+.custom-node.selected {
+  box-shadow: 0 0 0 2px var(--primary-color), 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Node type color theming */
+.indicator-node .ant-card { border-color: #722ed1; }
+.entry-rule-node .ant-card { border-color: #52c41a; }
+.exit-rule-node .ant-card { border-color: #f5222d; }
+.comparator-node .ant-card { border-color: #13c2c2; }
+.logical-node .ant-card { border-color: #eb2f96; }
+.math-node .ant-card { border-color: #fa8c16; }
+.stop-loss-node .ant-card { border-color: #ff4d4f; }
+.take-profit-node .ant-card { border-color: #faad14; }
+.position-size-node .ant-card { border-color: #2f54eb; }
+.price-data-node .ant-card { border-color: #1890ff; }
+.custom-function-node .ant-card { border-color: #22075e; }
+
+/* Dragging state */
+.react-flow__node.dragging {
+  opacity: 0.9;
+  transform: scale(1.02);
+}
+
+/* Edge animation on hover */
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--primary-color);
+  stroke-width: 2.5;
+}
+
+/* Edge path animation for data flow */
+@keyframes flowDash {
+  from { stroke-dashoffset: 20; }
+  to { stroke-dashoffset: 0; }
+}
+
+.react-flow__edge-path {
+  stroke-width: 2;
+  stroke: #b1b1b7;
+  transition: stroke 0.2s;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--primary-color);
+  stroke-width: 2.5;
+}
+
+/* Connection line preview */
+.react-flow__connection-path {
+  stroke: var(--primary-color);
+  stroke-width: 2;
+  stroke-dasharray: 5, 5;
+  animation: flowDash 0.5s linear infinite;
+}
+
+/* Mini map styling */
+.react-flow__minimap {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(0, 0, 0, 0.1);
+}
+
+/* Controls styling */
+.react-flow__controls {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.react-flow__controls-button {
+  border: none;
+  background: #fff;
+  color: #333;
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.react-flow__controls-button:hover {
+  background: #f0f0f0;
+}
+
+.react-flow__controls-button:active {
+  background: #e0e0e0;
+}
+
+/* Background grid */
+.react-flow__background {
+  background-color: #fafafa;
+}
+
+/* Selection rectangle */
+.react-flow__selection {
+  background: rgba(24, 144, 255, 0.05);
+  border: 1px solid rgba(24, 144, 255, 0.2);
+  border-radius: 4px;
+}
+
+/* Node palette item hover */
+.node-palette-item {
+  transition: all 0.2s;
+}
+
+.node-palette-item:hover {
+  background: #f0f5ff;
+  border-color: #1890ff;
+  transform: translateX(2px);
+}
+
+/* Property panel transitions */
+.property-panel-enter {
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Validation error highlight */
+.validation-error-node .ant-card {
+  border-color: #f5222d !important;
+  box-shadow: 0 0 0 2px rgba(245, 34, 45, 0.2) !important;
+}
+
+/* Backtest running indicator */
+.backtest-running .ant-btn-primary {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* AG Grid theme overrides */
+.ag-theme-alpine {
+  --ag-font-family: var(--font-family);
+  --ag-font-size: 13px;
+  --ag-border-radius: 4px;
+  --ag-header-background-color: #fafafa;
+  --ag-odd-row-background-color: #fafafa;
+  --ag-row-hover-color: #e6f7ff;
+  --ag-selected-row-background-color: #e6f7ff;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .sidebar-container {
+    position: fixed !important;
+    z-index: 1000;
+  }
+  
+  .ant-layout {
+    margin-left: 0 !important;
+  }
+  
+  .ant-header {
+    left: 0 !important;
+  }
+  
+  .ant-content {
+    padding: 12px !important;
+  }
+}
+
+/* Card shadows */
+.ant-card {
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02),
+    0 2px 4px rgba(0, 0, 0, 0.02);
+  transition: box-shadow 0.2s;
+}
+
+.ant-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Statistic component */
+.ant-statistic-title {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.ant-statistic-content-value {
+  font-weight: 600;
+}
+
+/* Table row styling */
+.ant-table-row-profit {
+  background-color: rgba(82, 196, 26, 0.05);
+}
+
+.ant-table-row-loss {
+  background-color: rgba(245, 34, 45, 0.05);
+}
+
+/* Form inputs */
+.ant-input:focus,
+.ant-input-number:focus,
+.ant-select-focused .ant-select-selector {
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+/* Button interactions */
+.ant-btn:active {
+  transform: scale(0.98);
+}
+
+/* Loading spinner */
+.ant-spin-dot-item {
+  background-color: var(--primary-color);
+}
+
+/* Tooltip */
+.ant-tooltip-inner {
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+/* Modal */
+.ant-modal-content {
+  border-radius: 8px;
+}
+
+.ant-modal-header {
+  border-radius: 8px 8px 0 0;
+}
+
+/* Tabs */
+.ant-tabs-tab {
+  border-radius: 6px 6px 0 0;
+}
+
+/* Divider */
+.ant-divider-horizontal {
+  margin: 16px 0;
+}
+
+/* Progress bar */
+.ant-progress-line {
+  font-size: 12px;
+}
+
+/* Badge */
+.ant-badge-count {
+  box-shadow: 0 0 0 1px #fff;
+}
+
+/* Dropdown menu */
+.ant-dropdown-menu {
+  border-radius: 8px;
+  box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.08), 0 9px 28px 0 rgba(0, 0, 0, 0.05),
+    0 12px 48px 16px rgba(0, 0, 0, 0.03);
+}
+
+/* Animation for page transitions */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-content {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Code block styling */
+pre {
+  background: #f6f8fa;
+  border-radius: 6px;
+  padding: 16px;
+  overflow: auto;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+  font-size: 0.9em;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 2px 6px;
+  border-radius: 3px;
+}

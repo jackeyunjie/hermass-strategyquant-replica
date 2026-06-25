@@ -1,0 +1,210 @@
+{# Jinja2 模板：生成 Hermass DSL 策略代码
+   使用说明：
+   - 此模板接收 StrategyIR 渲染上下文，生成 Hermass 自定义
+     DSL 格式的策略代码。
+   - Hermass DSL 是项目内部定义的领域特定语言，用于策略描述与可视化。
+   - 可被 Hermass 引擎直接解析执行
+#}
+# ====================================================================
+# Hermass DSL 策略定义
+# 声明式格式：描述策略结构、指标配置、规则配置和回测参数
+# ====================================================================
+
+METADATA {
+    strategy_name = "{{ strategy_name }}"
+    strategy_id = "{{ strategy_id }}"
+    description = "{{ description }}"
+    version = "{{ version }}"
+    generated_at = "{{ now }}"
+    template_type = "hermass_dsl"
+}
+
+CONFIG {
+    timeframe = "{{ config.timeframe }}"
+    market = "{{ config.market }}"
+    slippage = {{ config.slippage }}
+    commission_rate = {{ config.commission_rate }}
+    initial_capital = {{ config.initial_capital }}
+    position_sizing = "{{ config.position_sizing }}"
+    max_positions = {{ config.max_positions }}
+}
+
+# ====================================================================
+# 指标定义
+# 列出策略中使用的所有技术指标及其参数配置
+# ====================================================================
+INDICATORS {
+    {% for node_id, ind in indicator_expressions.items() %}
+    indicator {{ ind.var_name }} {
+        name = "{{ ind.name }}"
+        node_id = "{{ node_id }}"
+        {% if ind.params %}
+        params = {{ ind.params | tojson }}
+        {% else %}
+        params = {}
+        {% endif %}
+        expression = "{{ ind.expr }}"
+    }
+    {% else %}
+    # 未定义指标
+    {% endfor %}
+}
+
+# ====================================================================
+# 策略节点定义（Strategy IR 节点列表）
+# 以声明式格式描述策略树的完整拓扑结构
+# ====================================================================
+NODES {
+    {% for node in nodes %}
+    node "{{ node.id }}" {
+        type = "{{ node.type }}"
+        name = "{{ node.name }}"
+        {% if node.params %}
+        params = {{ node.params | tojson }}
+        {% endif %}
+        {% if node.meta %}
+        meta = {{ node.meta | tojson }}
+        {% endif %}
+    }
+    {% endfor %}
+}
+
+EDGES {
+    {% for edge in edges %}
+    edge "{{ edge.source }}" -> "{{ edge.target }}" {
+        type = "{{ edge.type }}"
+        {% if edge.label %}
+        label = "{{ edge.label }}"
+        {% endif %}
+    }
+    {% endfor %}
+}
+
+# ====================================================================
+# 策略树结构（嵌套表示，便于可视化）
+# ====================================================================
+STRATEGY_TREE {
+    {% if strategy_tree %}
+    {{ strategy_tree | tojson }}
+    {% else %}
+    # 策略树为空
+    {% endif %}
+}
+
+# ====================================================================
+# 变量定义
+# 策略中使用的常量和可调参数
+# ====================================================================
+VARIABLES {
+    {% if variables %}
+    {% for key, value in variables.items() %}
+    {{ key }} = {{ value | tojson }}
+    {% endfor %}
+    {% else %}
+    # 未定义变量
+    {% endif %}
+}
+
+# ====================================================================
+# 交易规则
+# 中国 A 股市场特有的交易规则配置
+# ====================================================================
+RULES {
+    # T+1 交易制度：当日买入的股票次日才能卖出
+    T1_RULE = true
+
+    # 涨跌停限制：主板 ±10%，科创板/创业板 ±20%
+    LIMIT_UP_DOWN = true
+    limit_up_pct = 0.10
+    limit_down_pct = 0.10
+
+    # 停牌处理：停牌期间禁止交易
+    SUSPENSION = true
+
+    # 除权除息处理：分红送股后自动复权
+    RIGHTS_ADJUSTMENT = true
+    adjust_type = "qfq"  # 前复权
+
+    # 交易时间限制：仅允许在 9:30-11:30, 13:00-15:00 交易
+    TRADING_HOURS_ONLY = true
+}
+
+# ====================================================================
+# 信号条件（由 IR 解析生成）
+# 买入/卖出条件的结构化描述
+# ====================================================================
+SIGNALS {
+    entry {
+        {% for cond in entry_conditions %}
+        condition "entry_{{ loop.index }}" {
+            expression = "{{ cond }}"
+            logic = "OR"  # 多个条件间的关系：AND / OR
+        }
+        {% endfor %}
+        default = false
+    }
+
+    exit {
+        {% for cond in exit_conditions %}
+        condition "exit_{{ loop.index }}" {
+            expression = "{{ cond }}"
+            logic = "OR"
+        }
+        {% endfor %}
+        default = false
+    }
+}
+
+# ====================================================================
+# 回测配置
+# ====================================================================
+BACKTEST {
+    start_date = "2020-01-01"
+    end_date = "2024-01-01"
+    benchmark = "000001.SH"  # 上证指数
+    data_source = "tushare"  # 或 akshare, yfinance
+
+    # 性能评估指标
+    metrics = ["sharpe", "max_drawdown", "win_rate", "annual_return", "calmar_ratio"]
+}
+
+# ====================================================================
+# 执行指令
+# 使用 Hermass 引擎执行此 DSL 策略
+# ====================================================================
+EXECUTE {
+    engine = "HermassEngine"
+    mode = "backtest"  # backtest / live / paper
+    parallel = false
+    log_level = "INFO"
+}
+
+# ====================================================================
+# Python 执行代码（内嵌，供直接运行）
+# 以下代码可被 Hermass 引擎直接解析执行
+# ====================================================================
+PYTHON {
+    """
+    from hermass.engine import HermassEngine
+
+    # 加载 DSL 策略
+    engine = HermassEngine()
+    engine.load_dsl("{{ strategy_id }}.dsl")
+
+    # 设置回测参数
+    engine.set_config({
+        "timeframe": "{{ config.timeframe }}",
+        "market": "{{ config.market }}",
+        "initial_capital": {{ config.initial_capital }},
+        "commission_rate": {{ config.commission_rate }},
+        "slippage": {{ config.slippage }},
+    })
+
+    # 执行回测
+    result = engine.run(data_source="tushare")
+
+    # 输出结果
+    print(result.summary())
+    print(result.metrics())
+    """
+}
