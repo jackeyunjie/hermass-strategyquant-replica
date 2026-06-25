@@ -113,13 +113,13 @@ jobs:
               mv "$DEPLOY_ENV_BACKUP" "$APP_DIR/deploy/.env"
             fi
 
-            cat > "$APP_DIR/DEPLOYED_VERSION" <<VERSION_EOF
-            commit=${{ github.sha }}
-            ref=${{ github.ref_name }}
-            workflow_run=${{ github.run_id }}
-            deployed_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
-            url=http://quant.superalpha.com.cn
-            VERSION_EOF
+            {
+              printf 'commit=%s\n' '${{ github.sha }}'
+              printf 'ref=%s\n' '${{ github.ref_name }}'
+              printf 'workflow_run=%s\n' '${{ github.run_id }}'
+              printf 'deployed_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+              printf 'url=%s\n' 'http://quant.superalpha.com.cn'
+            } > "$APP_DIR/DEPLOYED_VERSION"
 
             chmod +x "$APP_DIR/deploy/deploy.sh" "$APP_DIR/deploy/server-setup.sh" "$APP_DIR/scripts/prod_smoke.sh" || true
 
