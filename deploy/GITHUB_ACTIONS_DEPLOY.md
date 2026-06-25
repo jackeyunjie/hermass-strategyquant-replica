@@ -149,13 +149,16 @@ certbot --nginx -d quant.superalpha.com.cn
 3. 确认 workflow 运行成功（绿色 ✓）
 4. 访问 `http://quant.superalpha.com.cn/health` 验证；HTTPS 证书配置完成后再验证 `https://quant.superalpha.com.cn/health`
 
-workflow 会执行三段动作：
+workflow 会执行四段动作：
 
-1. 在 GitHub runner 上打包源码，排除 `.env`、`node_modules`、`frontend/dist`、缓存目录。
-2. 上传 `hermass-release.tgz` 到服务器 `/tmp`。
-3. 在服务器 `/opt/hermass-strategyquant-replica` 保留 `.env`，替换代码，执行 `deploy/deploy.sh --ci`，并校验本机 `127.0.0.1:8081/health` 和公网 `/health`。
+1. 在 GitHub runner 上执行 `frontend/npm ci` 和 `npm run build`，生成 `frontend/dist`。
+2. 打包源码和前端静态产物，排除 `.env`、`node_modules`、缓存目录。
+3. 上传 `hermass-release.tgz` 到服务器 `/tmp`。
+4. 在服务器 `/opt/hermass-strategyquant-replica` 保留 `.env`，替换代码，执行 `deploy/deploy.sh --ci`，并校验本机 `127.0.0.1:8081/health` 和公网 `/health`。
 
 生产环境变量只存放在服务器 `/opt/hermass-strategyquant-replica/.env`，不会由 GitHub Actions 覆盖。
+
+CI 模式不会执行 `docker system prune`，以保留基础镜像和 BuildKit 缓存，降低服务器访问外部镜像源失败导致部署标红的概率。前端静态资源在 GitHub runner 上构建，服务器前端镜像只负责用 Nginx 托管 `frontend/dist`。
 
 ## 日常运维
 

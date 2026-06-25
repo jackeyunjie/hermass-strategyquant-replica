@@ -144,8 +144,16 @@ cd "$APP_DIR"
 cp "$APP_DIR/.env" deploy/.env 2>/dev/null || true
 
 cd deploy
-$COMPOSE_CMD pull 2>/dev/null || true
-$COMPOSE_CMD up -d --build --remove-orphans
+if [ "$SETUP_MODE" = "full" ]; then
+  $COMPOSE_CMD pull 2>/dev/null || true
+fi
+
+if ! $COMPOSE_CMD up -d --build --remove-orphans; then
+  log_error "Docker Compose build/start failed."
+  log_warn "Existing containers were left untouched where Docker Compose could preserve them."
+  $COMPOSE_CMD ps || true
+  exit 1
+fi
 
 # -----------------------------------------------------------------------------
 # Database migrations
@@ -206,7 +214,11 @@ fi
 # Cleanup
 # -----------------------------------------------------------------------------
 log_step "Cleaning up unused Docker resources..."
-docker system prune -f || true
+if [ "$SETUP_MODE" = "full" ]; then
+  docker system prune -f || true
+else
+  log_info "Skipping Docker system prune in CI mode to preserve build cache and base images"
+fi
 
 # -----------------------------------------------------------------------------
 # Summary
