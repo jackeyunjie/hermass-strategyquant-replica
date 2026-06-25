@@ -37,10 +37,12 @@ jobs:
       - name: Package release archive
         run: |
           set -euo pipefail
+          mkdir -p .release
           tar \
             --exclude='.git' \
             --exclude='.env' \
             --exclude='*/.env' \
+            --exclude='.release' \
             --exclude='node_modules' \
             --exclude='*/node_modules' \
             --exclude='frontend/dist' \
@@ -48,7 +50,7 @@ jobs:
             --exclude='*/__pycache__' \
             --exclude='.pytest_cache' \
             --exclude='*/.pytest_cache' \
-            -czf hermass-release.tgz .
+            -czf .release/hermass-release.tgz .
 
       - name: Upload release archive
         uses: appleboy/scp-action@v0.1.7
@@ -57,8 +59,9 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || '22' }}
-          source: hermass-release.tgz
+          source: .release/hermass-release.tgz
           target: /tmp
+          strip_components: 1
           overwrite: true
 
       - name: Deploy via SSH
